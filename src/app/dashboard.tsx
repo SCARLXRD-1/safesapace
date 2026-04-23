@@ -32,6 +32,11 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
   // Guardamos el ID del último registro procesado para saber cuándo llega uno nuevo
   const [lastProcessedId, setLastProcessedId] = useState<string | null>(null);
   const [nextReportIn, setNextReportIn] = useState(60);
+  
+  // Estados para el Historial y Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedReport, setSelectedReport] = useState<SensorData | null>(null);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     fetchData();
@@ -113,6 +118,13 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
       return dTime >= sTime && dTime <= eTime;
     });
   }, [data, startDate, endDate]);
+
+  // Lógica de Paginación
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedReports = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredData, currentPage]);
 
   const latest = data[0] || { temp: 0, hum: 0, ppm: 0, mov_percent: 0, baseline_ppm: 0 };
 
@@ -312,7 +324,167 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
           </div>
         </div>
 
+        </div>
+
+        {/* Historial de Reportes */}
+        <div className="bg-[var(--color-surface)] border border-black/5 rounded-3xl p-8 shadow-xl max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-[var(--color-primary)] flex items-center gap-2">
+                <BellRing size={24} /> Historial de Reportes
+              </h2>
+              <p className="text-sm text-[var(--color-text-muted)] mt-1">Registros detallados de detección de sensores</p>
+            </div>
+            <div className="bg-[var(--color-bg-dark)] px-4 py-2 rounded-xl border border-black/5">
+              <span className="text-sm font-bold text-[var(--color-text-muted)]">Total: {filteredData.length} registros</span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-black/5 text-[var(--color-text-muted)] text-xs uppercase tracking-widest font-bold">
+                  <th className="py-4 px-4">Fecha y Hora</th>
+                  <th className="py-4 px-4">Estado</th>
+                  <th className="py-4 px-4 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedReports.length > 0 ? paginatedReports.map((report) => (
+                  <tr key={report.id} className="border-b border-black/5 hover:bg-[var(--color-surface-hover)] transition-colors group">
+                    <td className="py-4 px-4">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-[var(--color-text-main)]">{format(parseISO(report.created_at), "dd/MM/yyyy")}</span>
+                        <span className="text-sm text-[var(--color-text-muted)]">{format(parseISO(report.created_at), "HH:mm:ss")}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
+                        report.is_emergency ? 'bg-red-500/10 text-red-600' : 
+                        report.alert_level === 'warning' ? 'bg-amber-500/10 text-amber-600' : 
+                        'bg-emerald-500/10 text-emerald-600'
+                      }`}>
+                        {report.is_emergency ? 'Emergencia' : report.alert_level === 'warning' ? 'Advertencia' : 'Normal'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-center">
+                      <button 
+                        onClick={() => setSelectedReport(report)}
+                        className="text-xs font-bold text-[var(--color-primary)] hover:underline uppercase tracking-widest"
+                      >
+                        Ver Detalles
+                      </button>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={3} className="py-12 text-center text-[var(--color-text-muted)] italic">
+                      No hay reportes que coincidan con los filtros seleccionados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-2 mt-8">
+              <button 
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                className="px-4 py-2 rounded-xl bg-[var(--color-bg-dark)] border border-black/5 disabled:opacity-30 font-bold text-sm transition-all hover:bg-[var(--color-surface-hover)]"
+              >
+                Anterior
+              </button>
+              <div className="flex gap-1">
+                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                  let pageNum = i + 1;
+                  if (currentPage > 3 && totalPages > 5) pageNum = currentPage - 2 + i;
+                  if (pageNum > totalPages) return null;
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-10 h-10 rounded-xl font-bold text-sm transition-all ${currentPage === pageNum ? 'bg-[var(--color-primary)] text-white shadow-lg' : 'bg-[var(--color-bg-dark)] border border-black/5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'}`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              <button 
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                className="px-4 py-2 rounded-xl bg-[var(--color-bg-dark)] border border-black/5 disabled:opacity-30 font-bold text-sm transition-all hover:bg-[var(--color-surface-hover)]"
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
+        </div>
+
       </div>
+
+      {/* Modal de Detalles del Reporte */}
+      {selectedReport && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[var(--color-surface)] w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-[var(--color-primary)] p-6 text-white flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold uppercase tracking-tight">Detalles del Reporte</h3>
+                <p className="text-sm opacity-80">{format(parseISO(selectedReport.created_at), "dd MMMM yyyy, HH:mm:ss")}</p>
+              </div>
+              <button onClick={() => setSelectedReport(null)} className="bg-black/20 hover:bg-black/40 p-2 rounded-full transition-colors">✕</button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-[var(--color-bg-dark)] p-4 rounded-2xl border border-black/5">
+                  <span className="text-[10px] font-bold uppercase text-[var(--color-text-muted)] block mb-1">Temperatura</span>
+                  <span className="text-2xl font-black text-[#EF4444]">{selectedReport.temp.toFixed(1)}°C</span>
+                </div>
+                <div className="bg-[var(--color-bg-dark)] p-4 rounded-2xl border border-black/5">
+                  <span className="text-[10px] font-bold uppercase text-[var(--color-text-muted)] block mb-1">Humedad</span>
+                  <span className="text-2xl font-black text-[#3B82F6]">{selectedReport.hum.toFixed(0)}%</span>
+                </div>
+                <div className="bg-[var(--color-bg-dark)] p-4 rounded-2xl border border-black/5">
+                  <span className="text-[10px] font-bold uppercase text-[var(--color-text-muted)] block mb-1">Gas (PPM)</span>
+                  <span className="text-2xl font-black text-[#10B981]">{selectedReport.ppm.toFixed(0)}</span>
+                </div>
+                <div className="bg-[var(--color-bg-dark)] p-4 rounded-2xl border border-black/5">
+                  <span className="text-[10px] font-bold uppercase text-[var(--color-text-muted)] block mb-1">Actividad PIR</span>
+                  <span className="text-2xl font-black text-[var(--color-primary)]">{selectedReport.mov_percent.toFixed(0)}%</span>
+                </div>
+              </div>
+
+              <div className="bg-[var(--color-bg-dark)] p-4 rounded-2xl border border-black/5">
+                <span className="text-[10px] font-bold uppercase text-[var(--color-text-muted)] block mb-2">Evaluación del Sistema</span>
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${
+                    selectedReport.is_emergency ? 'bg-red-500' : 
+                    selectedReport.alert_level === 'warning' ? 'bg-amber-500' : 
+                    'bg-emerald-500'
+                  }`}></div>
+                  <span className="font-bold uppercase tracking-wide text-sm">
+                    {selectedReport.is_emergency ? 'Detección de Emergencia Crítica' : 
+                     selectedReport.alert_level === 'warning' ? 'Advertencia de Riesgo Moderado' : 
+                     'Ambiente Seguro y Estable'}
+                  </span>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setSelectedReport(null)}
+                className="w-full py-4 bg-[var(--color-bg-dark)] hover:bg-[var(--color-surface-hover)] border border-black/10 rounded-2xl font-bold uppercase tracking-widest text-sm transition-all"
+              >
+                Cerrar Reporte
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notifier */}
       {toast.visible && (
