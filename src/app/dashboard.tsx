@@ -324,7 +324,6 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
           </div>
         </div>
 
-        </div>
 
         {/* Historial de Reportes */}
         <div className="bg-[var(--color-surface)] border border-black/5 rounded-3xl p-8 shadow-xl max-w-7xl mx-auto">
