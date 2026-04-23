@@ -163,7 +163,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
         </div>
 
         {/* Filters */}
-        <div className="bg-[var(--color-surface)] border border-white/5 rounded-2xl p-6 shadow-xl max-w-3xl mx-auto">
+        <div className="bg-[var(--color-surface)] border border-black/5 rounded-2xl p-6 shadow-xl max-w-3xl mx-auto">
           <div className="flex flex-wrap gap-4 items-end justify-center">
             <div className="flex flex-col">
               <label className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-widest mb-2">Desde</label>
@@ -171,7 +171,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
                 type="datetime-local" 
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
-                className="bg-[#1A1A1A] border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-colors"
+                className="bg-[var(--color-bg-dark)] border border-black/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-colors"
               />
             </div>
             <div className="flex flex-col">
@@ -180,12 +180,12 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
                 type="datetime-local" 
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
-                className="bg-[#1A1A1A] border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-colors"
+                className="bg-[var(--color-bg-dark)] border border-black/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-colors"
               />
             </div>
             <button 
               onClick={() => {setStartDate(""); setEndDate("");}}
-              className="px-6 py-3 bg-[var(--color-surface-hover)] hover:bg-white/10 rounded-xl text-sm font-medium transition-colors shadow"
+              className="px-6 py-3 bg-[var(--color-surface-hover)] hover:bg-black/5 rounded-xl text-sm font-medium transition-colors shadow"
             >
               Limpiar
             </button>
@@ -205,7 +205,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
               <span className="text-5xl font-extrabold tracking-tighter">{latest.temp?.toFixed(1) || '--'}</span>
               <span className="text-xl text-[var(--color-text-muted)] font-medium">°C</span>
             </div>
-            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/20 ${getTempStatus(latest.temp).color}`}>
+            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/5 ${getTempStatus(latest.temp).color}`}>
               {getTempStatus(latest.temp).text}
             </span>
           </div>
@@ -220,7 +220,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
               <span className="text-5xl font-extrabold tracking-tighter">{Math.round(latest.hum) || '--'}</span>
               <span className="text-xl text-[var(--color-text-muted)] font-medium">% RH</span>
             </div>
-            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/20 ${getHumStatus(latest.hum).color}`}>
+            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/5 ${getHumStatus(latest.hum).color}`}>
               {getHumStatus(latest.hum).text}
             </span>
           </div>
@@ -238,7 +238,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
               </div>
               <span className="text-xs text-[var(--color-text-muted)] font-medium">Baseline: {Math.round(latest.baseline_ppm || 0)} ppm</span>
             </div>
-            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/20 ${getGasStatus(latest.ppm, latest.baseline_ppm).color}`}>
+            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/5 ${getGasStatus(latest.ppm, latest.baseline_ppm).color}`}>
               {getGasStatus(latest.ppm, latest.baseline_ppm).text}
             </span>
           </div>
@@ -253,14 +253,14 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
               <span className="text-5xl font-extrabold tracking-tighter">{latest.mov_percent?.toFixed(0) || '0'}</span>
               <span className="text-xl text-[var(--color-text-muted)] font-medium">%</span>
             </div>
-            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/20 ${getMovStatus(latest.mov_percent).color}`}>
+            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/5 ${getMovStatus(latest.mov_percent).color}`}>
               {getMovStatus(latest.mov_percent).text}
             </span>
           </div>
         </div>
 
         {/* Charts Section */}
-        <div className="bg-[var(--color-surface)] border border-white/5 rounded-3xl p-6 shadow-xl max-w-7xl mx-auto">
+        <div className="bg-[var(--color-surface)] border border-black/5 rounded-3xl p-6 shadow-xl max-w-7xl mx-auto">
           <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-[var(--color-primary)]">
             <Activity size={24} /> Histórico de Monitoreo
           </h2>
@@ -271,11 +271,11 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
                 <Line type="monotone" dataKey="temp" stroke="#E8832A" strokeWidth={3} dot={false} name="Temperatura (°C)" />
                 <Line type="monotone" dataKey="hum" stroke="#D4883A" strokeWidth={3} dot={false} name="Humedad (%)" />
                 <Line type="monotone" dataKey="ppm" stroke="#C4692E" strokeWidth={3} dot={false} name="Gas (ppm)" />
-                <CartesianGrid stroke="#3A3A3A" strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="time" stroke="#A0A0A0" tick={{fill: '#A0A0A0', fontSize: 12}} tickLine={false} axisLine={false} />
                 <YAxis stroke="#A0A0A0" tick={{fill: '#A0A0A0', fontSize: 12}} tickLine={false} axisLine={false} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#2D2D2D', borderColor: '#3A3A3A', borderRadius: '12px', color: '#F5F5F5', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                  contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', borderRadius: '12px', color: '#1A1A1A', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}
                   itemStyle={{ fontWeight: 'bold' }}
                 />
                 <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />

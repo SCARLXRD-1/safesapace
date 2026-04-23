@@ -4,21 +4,21 @@
 
 @layer base {
   :root {
-    /* Paleta Safespace */
+    /* Paleta Safespace Light Theme */
     --color-primary: #E8832A;
     --color-secondary: #C4692E;
     --color-tertiary: #D4883A;
     
-    --color-bg-dark: #1A1A1A;
-    --color-surface: #2D2D2D;
-    --color-surface-hover: #3A3A3A;
+    --color-bg-dark: #F9F8F6; /* Beige muy claro */
+    --color-surface: #FFFFFF; /* Blanco para tarjetas */
+    --color-surface-hover: #F2EFE9; /* Beige sutil */
     
-    --color-text-main: #F5F5F5;
-    --color-text-muted: #A0A0A0;
+    --color-text-main: #1A1A1A; /* Texto oscuro */
+    --color-text-muted: #6B7280; /* Gris medio */
 
-    --color-success: #22C55E;
-    --color-warning: #F59E0B;
-    --color-danger: #EF4444;
+    --color-success: #16A34A; /* Verde más oscuro para contraste */
+    --color-warning: #D97706; /* Ámbar oscuro */
+    --color-danger: #DC2626; /* Rojo oscuro */
 
     font-family: "Outfit", "Inter", system-ui, sans-serif;
     line-height: 1.5;
