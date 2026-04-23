@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "To Do List",
-  description: "A simple to-do list app.",
+  title: "Safespace",
+  description: "Monitorización de sensores y seguridad ambiental.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -12,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="dark">
+    <html lang="es" data-theme="dark">
       <body className="antialiased">{children}</body>
     </html>
   );

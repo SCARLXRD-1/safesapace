@@ -4,7 +4,23 @@
 
 @layer base {
   :root {
-    font-family: "Inter", system-ui, sans-serif;
+    /* Paleta Safespace */
+    --color-primary: #E8832A;
+    --color-secondary: #C4692E;
+    --color-tertiary: #D4883A;
+    
+    --color-bg-dark: #1A1A1A;
+    --color-surface: #2D2D2D;
+    --color-surface-hover: #3A3A3A;
+    
+    --color-text-main: #F5F5F5;
+    --color-text-muted: #A0A0A0;
+
+    --color-success: #22C55E;
+    --color-warning: #F59E0B;
+    --color-danger: #EF4444;
+
+    font-family: "Outfit", "Inter", system-ui, sans-serif;
     line-height: 1.5;
     font-weight: 400;
     font-synthesis: none;
@@ -15,8 +31,8 @@
 
   body {
     @apply m-0 min-w-[320px] min-h-screen;
-    background: #1f1f1f;
-    color: #ffffff;
+    background: var(--color-bg-dark);
+    color: var(--color-text-main);
   }
 
   * {

@@ -70,7 +70,7 @@ export function TodoApp({ dashboardUrl }: { dashboardUrl: string }) {
       <main className="flex flex-1 items-center justify-center">
         <div className="flex w-[343px] flex-col items-center gap-7">
           <h1 className="w-full text-center text-[22px] font-bold text-white">
-            To Do List
+            Safespace
           </h1>
 
           {/* Add todo */}

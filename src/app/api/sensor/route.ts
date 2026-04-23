@@ -4,28 +4,33 @@ import { createClient } from '@insforge/sdk';
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    const { temp, hum, ppm, mov } = data;
-
-    // Check if it's an alert
-    const isAlert = temp < 15 || temp > 30 || hum < 30 || hum > 60 || ppm > 300 || mov;
     
-    // Create a JSON log string
-    const payload = JSON.stringify({ temp, hum, ppm, mov, isAlert });
+    // Extraemos los nuevos campos que envía el ESP32
+    const { temp, hum, ppm, mov_count, mov_percent, alert_level, baseline_ppm, is_emergency } = data;
 
-    // Initialize Insforge client with service role key if needed, or anon key
-    // We will use anon key for now since the table is public
+    // -- Usamos el anonKey para insertar, asegúrate de que RLS permita inserts públicos si es necesario --
     const insforge = createClient({
       baseUrl: process.env.NEXT_PUBLIC_INSFORGE_URL!,
       anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY!,
     });
 
-    // Insert into todo table as a log
+    // -- Insertamos en la nueva tabla tipada en lugar de meter JSON en un campo text --
     const { error } = await insforge.database
-      .from("todo")
-      .insert([{ text: payload }]);
+      .from("sensor_readings")
+      .insert([{ 
+        temp, 
+        hum, 
+        ppm, 
+        mov_count, 
+        mov_percent, 
+        is_alert: alert_level !== 'normal', 
+        alert_level, 
+        baseline_ppm, 
+        is_emergency 
+      }]);
 
     if (error) {
-      console.error("Error inserting data:", error);
+      console.error("Error inserting data into sensor_readings:", error);
       return NextResponse.json({ error: "Failed to insert data" }, { status: 500 });
     }
 
