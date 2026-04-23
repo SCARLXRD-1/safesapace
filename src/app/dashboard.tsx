@@ -268,9 +268,9 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 {/* Colores usando la nueva paleta de la marca para las líneas */}
-                <Line type="monotone" dataKey="temp" stroke="#E8832A" strokeWidth={3} dot={false} name="Temperatura (°C)" />
-                <Line type="monotone" dataKey="hum" stroke="#D4883A" strokeWidth={3} dot={false} name="Humedad (%)" />
-                <Line type="monotone" dataKey="ppm" stroke="#C4692E" strokeWidth={3} dot={false} name="Gas (ppm)" />
+                <Line type="monotone" dataKey="temp" stroke="#EF4444" strokeWidth={3} dot={false} name="Temperatura (°C)" />
+                <Line type="monotone" dataKey="hum" stroke="#3B82F6" strokeWidth={3} dot={false} name="Humedad (%)" />
+                <Line type="monotone" dataKey="ppm" stroke="#10B981" strokeWidth={3} dot={false} name="Gas (ppm)" />
                 <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="time" stroke="#A0A0A0" tick={{fill: '#A0A0A0', fontSize: 12}} tickLine={false} axisLine={false} />
                 <YAxis stroke="#A0A0A0" tick={{fill: '#A0A0A0', fontSize: 12}} tickLine={false} axisLine={false} />
