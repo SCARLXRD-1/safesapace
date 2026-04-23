@@ -31,6 +31,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
 
   // Guardamos el ID del último registro procesado para saber cuándo llega uno nuevo
   const [lastProcessedId, setLastProcessedId] = useState<string | null>(null);
+  const [nextReportIn, setNextReportIn] = useState(60);
 
   useEffect(() => {
     fetchData();
@@ -39,6 +40,22 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  // -- Lógica del Cronómetro de Próximo Reporte --
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (data.length > 0) {
+        const latestTime = new Date(data[0].created_at).getTime();
+        const now = Date.now();
+        const elapsedSeconds = Math.floor((now - latestTime) / 1000);
+        
+        // El ESP32 reporta cada 60s. Calculamos cuánto falta para el siguiente.
+        const remaining = 60 - (elapsedSeconds % 60);
+        setNextReportIn(remaining);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [data]);
 
   // -- Evaluar si el dispositivo está offline --
   useEffect(() => {
@@ -153,12 +170,23 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
           </h1>
           <p className="text-[var(--color-text-muted)] mt-2 font-medium">Sistema Inteligente de Monitoreo</p>
           
-          {/* Badge de estado (Offline / Online) */}
-          <div className={`mt-6 px-6 py-2 border rounded-full flex items-center gap-3 transition-colors ${isOffline ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'}`}>
-            {isOffline ? <WifiOff size={18} /> : <Wifi size={18} />}
-            <span className="text-[15px] font-bold tracking-wide">
-              {isOffline ? "DISPOSITIVO DESCONECTADO" : "SISTEMA EN LÍNEA"}
-            </span>
+          {/* Badges de estado (Offline / Online y Cronómetro) */}
+          <div className="flex flex-wrap justify-center gap-4 mt-6">
+            <div className={`px-6 py-2 border rounded-full flex items-center gap-3 transition-colors ${isOffline ? 'bg-red-500/10 border-red-500/30 text-red-600' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'}`}>
+              {isOffline ? <WifiOff size={18} /> : <Wifi size={18} />}
+              <span className="text-[15px] font-bold tracking-wide">
+                {isOffline ? "DISPOSITIVO DESCONECTADO" : "SISTEMA EN LÍNEA"}
+              </span>
+            </div>
+
+            {!isOffline && (
+              <div className="px-6 py-2 border border-black/10 bg-white rounded-full flex items-center gap-3 shadow-sm">
+                <Activity size={18} className="text-[var(--color-primary)]" />
+                <span className="text-[15px] font-bold tracking-wide text-[var(--color-text-main)]">
+                  PRÓXIMO REPORTE EN: <span className="text-[var(--color-primary)]">{nextReportIn}s</span>
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
