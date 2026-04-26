@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { insforge } from "./insforge-client";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format, parseISO } from "date-fns";
-import { BellRing, Activity, AlertTriangle, WifiOff, Wifi, ChevronRight } from "lucide-react";
+import { BellRing, Activity, AlertTriangle, WifiOff, Wifi, ChevronRight, ChevronLeft } from "lucide-react";
 
 // -- Definición tipada de la nueva tabla de base de datos --
 interface SensorData {
@@ -21,7 +21,7 @@ interface SensorData {
   is_emergency: boolean;
 }
 
-// --- COMPONENTE SENSOR CARD (OPTIMIZADO) ---
+// --- COMPONENTE SENSOR CARD ---
 const SensorCard = ({ title, value, unit, status, sparkKey, color, sparklineData, isOffline }: any) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const displayVal = isOffline ? 0 : (typeof value === 'number' ? value : 0);
@@ -129,7 +129,6 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
       const latestTime = new Date(latestData.created_at).getTime();
       const now = Date.now();
       
-      // Umbral offline: 150 seg
       setIsOffline(now - latestTime > 150000);
 
       if (latestData.id !== lastProcessedId) {
@@ -159,6 +158,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
     });
   }, [data, startDate, endDate]);
 
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedReports = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     return filteredData.slice(startIndex, startIndex + itemsPerPage);
@@ -217,7 +217,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
         <div className="bg-white border border-black/5 rounded-3xl p-6 shadow-xl max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div className="flex flex-col"><label className="text-[10px] font-black uppercase mb-2">Desde</label><input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-gray-50 border border-black/5 rounded-xl px-4 py-3 text-sm" /></div>
           <div className="flex flex-col"><label className="text-[10px] font-black uppercase mb-2">Hasta</label><input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-gray-50 border border-black/5 rounded-xl px-4 py-3 text-sm" /></div>
-          <button onClick={() => {setStartDate(""); setEndDate("");}} className="w-full py-3 bg-black text-white rounded-xl text-xs font-black tracking-widest uppercase">LIMPIAR</button>
+          <button onClick={() => {setStartDate(""); setEndDate(""); setCurrentPage(1);}} className="w-full py-3 bg-black text-white rounded-xl text-xs font-black tracking-widest uppercase">LIMPIAR</button>
         </div>
 
         {/* Cards Grid */}
@@ -254,9 +254,31 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
           </div>
         </div>
 
-        {/* Listado de Reportes */}
+        {/* Listado de Reportes con Paginación */}
         <div className="bg-white border border-black/5 rounded-[2rem] p-8 shadow-xl max-w-7xl mx-auto">
-          <h2 className="text-2xl font-black text-[var(--color-primary)] mb-8 uppercase italic flex items-center gap-3"><BellRing /> Listado de Reportes</h2>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <h2 className="text-2xl font-black text-[var(--color-primary)] uppercase italic flex items-center gap-3"><BellRing /> Listado de Reportes</h2>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-2 bg-gray-100 rounded-xl disabled:opacity-30 hover:bg-gray-200 transition-colors"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className="bg-black text-white px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase">
+                Página {currentPage} de {Math.max(1, totalPages)}
+              </div>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 bg-gray-100 rounded-xl disabled:opacity-30 hover:bg-gray-200 transition-colors"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead><tr className="border-b border-gray-100 text-[10px] uppercase font-black tracking-widest text-gray-400"><th className="pb-4 px-4">Fecha/Hora</th><th className="pb-4 px-4">Estado</th><th className="pb-4 px-4 text-center">Detalle</th></tr></thead>
@@ -268,6 +290,9 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
                     <td className="py-5 px-4 text-center"><button onClick={() => setSelectedReport(r)} className="text-[10px] font-black text-[var(--color-primary)] uppercase tracking-widest hover:underline">Ver Detalles</button></td>
                   </tr>
                 ))}
+                {paginatedReports.length === 0 && (
+                  <tr><td colSpan={3} className="py-20 text-center text-gray-400 font-black uppercase tracking-widest text-xs">No hay datos en este rango</td></tr>
+                )}
               </tbody>
             </table>
           </div>
