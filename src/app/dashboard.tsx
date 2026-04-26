@@ -33,20 +33,14 @@ const SensorCard = ({ title, value, unit, status, sparkKey, color, sparklineData
     >
       <div className={`flip-card-inner ${isFlipped ? 'flipped' : ''}`}>
         
-        {/* FRENTE: Gráfica + Valor actual */}
+        {/* FRENTE: Solo Gráfica de Tendencia (Limpia) */}
         <div className="flip-card-front p-5 border border-black/5 bg-white rounded-3xl overflow-hidden shadow-lg">
           <div className="flex justify-between items-center mb-1">
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{title}</span>
             <div className={`w-3 h-3 rounded-full ${status.bg} shadow-[0_0_8px_currentColor]`}></div>
           </div>
           
-          {/* Valor actual - Posicionado para no chocar con el eje Y */}
-          <div className="absolute top-12 right-6 z-10 pointer-events-none text-right">
-            <span className="text-3xl font-black tracking-tighter" style={{color}}>{displayVal.toFixed(1)}</span>
-            <span className="text-[10px] font-bold ml-1 opacity-70" style={{color}}>{unit}</span>
-          </div>
-          
-          <div className="flex-1 -mx-2 overflow-hidden mt-6">
+          <div className="flex-1 -mx-2 overflow-hidden mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparklineData} margin={{left: -15, right: 5, top: 5, bottom: 0}}>
                 <defs>
@@ -62,7 +56,6 @@ const SensorCard = ({ title, value, unit, status, sparkKey, color, sparklineData
                   axisLine={false} 
                   width={35}
                 />
-                <ReferenceLine y={displayVal} stroke={color} strokeDasharray="4 4" strokeOpacity={0.3} />
                 <Area type="monotone" dataKey={sparkKey} stroke={color} fillOpacity={1} fill={`url(#gradient-${sparkKey})`} strokeWidth={3} isAnimationActive={true} />
               </AreaChart>
             </ResponsiveContainer>
@@ -70,7 +63,7 @@ const SensorCard = ({ title, value, unit, status, sparkKey, color, sparklineData
           
           <div className="text-center py-2 border-t border-black/5 mt-1">
             <span className="text-[9px] font-black text-[var(--color-primary)] uppercase tracking-widest flex items-center justify-center gap-1">
-              DETALLES <ChevronRight size={10} />
+              CLICK PARA DETALLES ➔
             </span>
           </div>
         </div>
@@ -281,7 +274,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
         </div>
       </div>
 
-      {/* MODAL DETALLES (RESTAURADO COMPLETO) */}
+      {/* MODAL DETALLES */}
       {selectedReport && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-black/5">
