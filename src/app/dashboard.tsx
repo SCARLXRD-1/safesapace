@@ -126,28 +126,37 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
     return filteredData.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredData, currentPage]);
 
-  const latest = data[0] || { temp: 0, hum: 0, ppm: 0, mov_percent: 0, baseline_ppm: 0 };
+  const latest = useMemo(() => {
+    if (isOffline || data.length === 0) {
+      return { temp: 0, hum: 0, ppm: 0, mov_percent: 0, baseline_ppm: 0, id: 'offline' };
+    }
+    return data[0];
+  }, [data, isOffline]);
 
   // Helpers para la UI con colores basados en la nueva paleta y tailwind
   const getTempStatus = (t: number) => {
+    if (t === 0 && isOffline) return { color: "text-gray-400", text: "SISTEMA APAGADO", bg: "bg-gray-400" };
     if (t < 10 || t > 40) return { color: "text-[#EF4444]", text: "TEMP. CRÍTICA", bg: "bg-[#EF4444]" };
     if (t < 15 || t > 35) return { color: "text-[#F59E0B]", text: "TEMP. ANORMAL", bg: "bg-[#F59E0B]" };
     return { color: "text-[#22C55E]", text: "TEMPERATURA IDEAL", bg: "bg-[#22C55E]" };
   };
   
   const getHumStatus = (h: number) => {
+    if (h === 0 && isOffline) return { color: "text-gray-400", text: "SISTEMA APAGADO", bg: "bg-gray-400" };
     if (h < 20 || h > 70) return { color: "text-[#EF4444]", text: "HUMEDAD CRÍTICA", bg: "bg-[#EF4444]" };
     if (h < 30 || h > 60) return { color: "text-[#F59E0B]", text: "HUMEDAD ANORMAL", bg: "bg-[#F59E0B]" };
     return { color: "text-[#22C55E]", text: "HUMEDAD ÓPTIMA", bg: "bg-[#22C55E]" };
   };
 
   const getGasStatus = (g: number, base: number) => {
+    if (g === 0 && isOffline) return { color: "text-gray-400", text: "SISTEMA APAGADO", bg: "bg-gray-400" };
     if (g > base * 3 || g > 1000) return { color: "text-[#EF4444]", text: "ALERTA MÁXIMA", bg: "bg-[#EF4444]" };
     if (g > base * 1.5 || g > 300) return { color: "text-[#F59E0B]", text: "RIESGO MEDIO", bg: "bg-[#F59E0B]" };
     return { color: "text-[#22C55E]", text: "NIVEL SEGURO", bg: "bg-[#22C55E]" };
   };
 
   const getMovStatus = (p: number) => {
+    if (p === 0 && isOffline) return { color: "text-gray-400", text: "SISTEMA APAGADO", bg: "bg-gray-400" };
     if (p > 50) return { color: "text-[#EF4444]", text: "ALTA ACTIVIDAD", bg: "bg-[#EF4444]" };
     if (p > 10) return { color: "text-[#F59E0B]", text: "PRESENCIA MODERADA", bg: "bg-[#F59E0B]" };
     return { color: "text-[#22C55E]", text: "ÁREA DESPEJADA", bg: "bg-[#22C55E]" };
@@ -160,8 +169,80 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
     ppm: d.ppm
   }));
 
+  // Datos para las mini-gráficas (Sparklines) de las cards
+  const sparklineData = useMemo(() => {
+    return data.slice(0, 20).reverse().map(d => ({
+      temp: d.temp,
+      hum: d.hum,
+      ppm: d.ppm,
+      mov: d.mov_percent
+    }));
+  }, [data]);
+
+  // Componente interno para la Card con Flip
+  const SensorCard = ({ title, value, unit, status, sparkKey, color }: any) => {
+    const [isFlipped, setIsFlipped] = useState(false);
+    
+    return (
+      <div 
+        className="perspective-1000 h-[220px] cursor-pointer group"
+        onClick={() => setIsFlipped(!isFlipped)}
+      >
+        <div className={`flip-card-inner ${isFlipped ? 'flipped' : ''}`}>
+          {/* FRENTE: Gráfica Sparkline */}
+          <div className="flip-card-front bg-[var(--color-surface)] p-6 border border-[var(--color-primary)]/10 shadow-lg flex flex-col justify-between overflow-hidden">
+            <div className="flex justify-between items-center z-10">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">{title} (Tendencia)</span>
+              <div className={`w-2 h-2 rounded-full ${status.bg} shadow-[0_0_8px_currentColor]`}></div>
+            </div>
+            
+            <div className="flex-1 mt-4 -mx-6 -mb-6 opacity-80 group-hover:opacity-100 transition-opacity">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={sparklineData}>
+                  <Line 
+                    type="monotone" 
+                    dataKey={sparkKey} 
+                    stroke={color} 
+                    strokeWidth={3} 
+                    dot={false} 
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div className="absolute bottom-4 right-6 text-[10px] font-bold text-[var(--color-primary)] opacity-0 group-hover:opacity-100 transition-opacity">
+              CLIC PARA VER DATOS ➔
+            </div>
+          </div>
+
+          {/* REVERSO: Datos Numéricos (Vista actual) */}
+          <div className="flip-card-back bg-[var(--color-surface)] p-6 border border-[var(--color-primary)]/30 shadow-2xl flex flex-col justify-between">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-muted)]">{title}</span>
+              <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${status.bg}`}></div>
+            </div>
+            <div className="flex flex-col items-center justify-center flex-1">
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-black tracking-tighter text-[var(--color-text-main)]">
+                  {isOffline ? '0' : (typeof value === 'number' ? value.toFixed(1) : value)}
+                </span>
+                <span className="text-xl text-[var(--color-text-muted)] font-bold">{unit}</span>
+              </div>
+            </div>
+            <div className="text-center">
+              <span className={`inline-block px-4 py-1.5 rounded-xl text-[10px] font-black tracking-wider uppercase bg-black/5 ${status.color}`}>
+                {status.text}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Render variables to handle the offline dimming effect
-  const cardOpacity = isOffline ? "opacity-50 grayscale transition-all duration-1000" : "opacity-100 transition-all duration-1000";
+  const cardOpacity = isOffline ? "opacity-70 transition-all duration-1000" : "opacity-100 transition-all duration-1000";
 
   return (
     <div className="min-h-screen bg-[var(--color-bg-dark)] text-[var(--color-text-main)] p-6 font-sans">
@@ -170,8 +251,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
         {/* Header con el logo y el gradiente de la marca */}
         <div className="flex flex-col items-center mb-8 pt-4">
           <div className="relative w-24 h-24 mb-4">
-            {/* Si tienes el logo, asegúrate de colocarlo en public/logo.png */}
-            {/* <Image src="/logo.png" alt="Safespace Logo" fill className="object-contain" /> */}
+            <Activity size={80} className="text-[var(--color-primary)] animate-pulse" />
           </div>
           <h1 className="text-5xl font-extrabold tracking-tight uppercase" style={{
             background: 'linear-gradient(to right, var(--color-primary), var(--color-secondary))',
@@ -184,7 +264,7 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
           
           {/* Badges de estado (Offline / Online y Cronómetro) */}
           <div className="flex flex-wrap justify-center gap-4 mt-6">
-            <div className={`px-6 py-2 border rounded-full flex items-center gap-3 transition-colors ${isOffline ? 'bg-red-500/10 border-red-500/30 text-red-600' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'}`}>
+            <div className={`px-6 py-2 border rounded-full flex items-center gap-3 transition-colors ${isOffline ? 'bg-red-500/10 border-red-500/30 text-red-600 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'}`}>
               {isOffline ? <WifiOff size={18} /> : <Wifi size={18} />}
               <span className="text-[15px] font-bold tracking-wide">
                 {isOffline ? "DISPOSITIVO DESCONECTADO" : "SISTEMA EN LÍNEA"}
@@ -233,70 +313,39 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
         </div>
 
         {/* Cards Grid */}
-        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto ${cardOpacity}`}>
-          
-          {/* Temperatura */}
-          <div className="bg-[var(--color-surface)] p-6 rounded-3xl border border-[var(--color-primary)]/20 shadow-lg relative overflow-hidden group hover:border-[var(--color-primary)]/50 transition-colors">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Temperatura</span>
-              <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${getTempStatus(latest.temp).bg}`}></div>
-            </div>
-            <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-5xl font-extrabold tracking-tighter">{latest.temp?.toFixed(1) || '--'}</span>
-              <span className="text-xl text-[var(--color-text-muted)] font-medium">°C</span>
-            </div>
-            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/5 ${getTempStatus(latest.temp).color}`}>
-              {getTempStatus(latest.temp).text}
-            </span>
-          </div>
-
-          {/* Humedad */}
-          <div className="bg-[var(--color-surface)] p-6 rounded-3xl border border-[var(--color-primary)]/20 shadow-lg relative overflow-hidden group hover:border-[var(--color-primary)]/50 transition-colors">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Humedad</span>
-              <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${getHumStatus(latest.hum).bg}`}></div>
-            </div>
-            <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-5xl font-extrabold tracking-tighter">{Math.round(latest.hum) || '--'}</span>
-              <span className="text-xl text-[var(--color-text-muted)] font-medium">% RH</span>
-            </div>
-            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/5 ${getHumStatus(latest.hum).color}`}>
-              {getHumStatus(latest.hum).text}
-            </span>
-          </div>
-
-          {/* Gas */}
-          <div className="bg-[var(--color-surface)] p-6 rounded-3xl border border-[var(--color-primary)]/20 shadow-lg relative overflow-hidden group hover:border-[var(--color-primary)]/50 transition-colors">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Calidad Aire</span>
-              <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${getGasStatus(latest.ppm, latest.baseline_ppm).bg}`}></div>
-            </div>
-            <div className="flex flex-col gap-1 mb-2">
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-extrabold tracking-tighter">{latest.ppm > 9999 ? '>9k' : Math.round(latest.ppm) || '--'}</span>
-                <span className="text-xl text-[var(--color-text-muted)] font-medium">ppm</span>
-              </div>
-              <span className="text-xs text-[var(--color-text-muted)] font-medium">Baseline: {Math.round(latest.baseline_ppm || 0)} ppm</span>
-            </div>
-            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/5 ${getGasStatus(latest.ppm, latest.baseline_ppm).color}`}>
-              {getGasStatus(latest.ppm, latest.baseline_ppm).text}
-            </span>
-          </div>
-
-          {/* Movimiento */}
-          <div className="bg-[var(--color-surface)] p-6 rounded-3xl border border-[var(--color-primary)]/20 shadow-lg relative overflow-hidden group hover:border-[var(--color-primary)]/50 transition-colors">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Actividad (PIR)</span>
-              <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${getMovStatus(latest.mov_percent).bg}`}></div>
-            </div>
-            <div className="flex items-baseline gap-2 mb-4 h-[56px]">
-              <span className="text-5xl font-extrabold tracking-tighter">{latest.mov_percent?.toFixed(0) || '0'}</span>
-              <span className="text-xl text-[var(--color-text-muted)] font-medium">%</span>
-            </div>
-            <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/5 ${getMovStatus(latest.mov_percent).color}`}>
-              {getMovStatus(latest.mov_percent).text}
-            </span>
-          </div>
+        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto ${cardOpacity}`}>
+          <SensorCard 
+            title="Temperatura" 
+            value={latest.temp} 
+            unit="°C" 
+            status={getTempStatus(latest.temp)} 
+            sparkKey="temp"
+            color="#EF4444"
+          />
+          <SensorCard 
+            title="Humedad" 
+            value={latest.hum} 
+            unit="% RH" 
+            status={getHumStatus(latest.hum)} 
+            sparkKey="hum"
+            color="#3B82F6"
+          />
+          <SensorCard 
+            title="Calidad Aire" 
+            value={latest.ppm > 9999 ? '>9k' : latest.ppm} 
+            unit="ppm" 
+            status={getGasStatus(latest.ppm, latest.baseline_ppm)} 
+            sparkKey="ppm"
+            color="#10B981"
+          />
+          <SensorCard 
+            title="Actividad" 
+            value={latest.mov_percent} 
+            unit="%" 
+            status={getMovStatus(latest.mov_percent)} 
+            sparkKey="mov"
+            color="#E8832A"
+          />
         </div>
 
         {/* Charts Section */}
