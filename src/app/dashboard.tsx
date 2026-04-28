@@ -1,12 +1,23 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { insforge } from "./insforge-client";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { format, parseISO } from "date-fns";
-import { BellRing, Activity, AlertTriangle, WifiOff, Wifi, ChevronRight, ChevronLeft } from "lucide-react";
+import { BellRing, Activity, WifiOff, Wifi, ChevronRight, ChevronLeft, TrendingUp, TrendingDown, Minus, Zap, Clock, Shield } from "lucide-react";
 
-// -- Definición tipada de la nueva tabla de base de datos --
+// -- Tipo para datos en vivo (tabla sensor_live) --
+interface LiveData {
+  id: string;
+  created_at: string;
+  temp: number;
+  hum: number;
+  ppm: number;
+  mov: boolean;
+  baseline_ppm: number;
+}
+
+// -- Tipo para reportes enriquecidos (tabla sensor_readings) --
 interface SensorData {
   id: string;
   created_at: string;
@@ -19,6 +30,56 @@ interface SensorData {
   alert_level: string;
   baseline_ppm: number;
   is_emergency: boolean;
+  temp_min?: number;
+  temp_max?: number;
+  ppm_min?: number;
+  ppm_max?: number;
+  hum_min?: number;
+  hum_max?: number;
+  ppm_trend?: string;
+  temp_trend?: string;
+  events?: string;
+  total_samples?: number;
+}
+
+// -- Generar narrativa del reporte en el frontend --
+function generarNarrativa(r: SensorData): string {
+  const parts: string[] = [];
+  const delta = r.ppm - (r.baseline_ppm || 0);
+  if (delta < 10) parts.push("Aire limpio durante el periodo.");
+  else if (delta < 50) parts.push("Ligera presencia de partículas detectada.");
+  else if (delta < 200) parts.push("Nivel de gas elevado respecto al baseline.");
+  else parts.push("⚠️ Concentración de gas peligrosa detectada.");
+
+  if (r.ppm_trend === "rising") parts.push("Tendencia ascendente en gas.");
+  else if (r.ppm_trend === "falling") parts.push("Tendencia descendente en gas.");
+  else if (r.ppm_trend === "spike") parts.push("Se detectó un pico significativo de gas.");
+  else parts.push("Niveles de gas estables.");
+
+  if (r.temp > 35) parts.push(`Temperatura elevada (${r.temp.toFixed(1)}°C).`);
+  else if (r.temp < 10) parts.push(`Temperatura baja (${r.temp.toFixed(1)}°C).`);
+  else parts.push("Temperatura en rango normal.");
+
+  if (r.mov_percent > 50) parts.push(`Alta actividad de movimiento (${r.mov_percent.toFixed(0)}%).`);
+  else if (r.mov_percent > 0) parts.push("Actividad moderada detectada.");
+  else parts.push("Sin movimiento detectado.");
+
+  return parts.join(" ");
+}
+
+function getTrendIcon(trend?: string) {
+  if (trend === "rising") return <TrendingUp size={14} className="text-red-500" />;
+  if (trend === "falling") return <TrendingDown size={14} className="text-blue-500" />;
+  if (trend === "spike") return <Zap size={14} className="text-amber-500" />;
+  return <Minus size={14} className="text-gray-400" />;
+}
+
+function parseEvents(eventsStr?: string): string[] {
+  if (!eventsStr) return [];
+  try {
+    const parsed = JSON.parse(eventsStr);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
 }
 
 // --- COMPONENTE SENSOR CARD ---
@@ -92,6 +153,8 @@ const SensorCard = ({ title, value, unit, status, sparkKey, color, sparklineData
 
 export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
   const [data, setData] = useState<SensorData[]>([]);
+  const [liveData, setLiveData] = useState<LiveData | null>(null);
+  const [liveHistory, setLiveHistory] = useState<LiveData[]>([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [toast, setToast] = useState<{ message: string; visible: boolean; isCritical: boolean; title?: string }>({ message: "", visible: false, isCritical: false });
@@ -104,11 +167,38 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
   const [selectedReport, setSelectedReport] = useState<SensorData | null>(null);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+  // Fetch live data every 3 seconds (lightweight - just 1 row)
+  const fetchLive = useCallback(async () => {
+    const { data: liveRows, error } = await insforge.database
+      .from("sensor_live")
+      .select().order("created_at", { ascending: false }).limit(1);
+    if (!error && liveRows && liveRows.length > 0) {
+      const newLive = liveRows[0] as LiveData;
+      setLiveData(newLive);
+      setLiveHistory(prev => {
+        if (prev.length > 0 && prev[0].id === newLive.id) return prev;
+        return [newLive, ...prev].slice(0, 30);
+      });
+      const elapsed = Date.now() - new Date(newLive.created_at).getTime();
+      setIsOffline(elapsed > 15000);
+    }
   }, []);
+
+  // Fetch reports (heavier, less frequent)
+  const fetchReports = useCallback(async () => {
+    const { data: rawData, error } = await insforge.database
+      .from("sensor_readings")
+      .select().order("created_at", { ascending: false }).limit(200);
+    if (!error && rawData) setData(rawData as SensorData[]);
+  }, []);
+
+  useEffect(() => {
+    fetchLive();
+    fetchReports();
+    const liveInterval = setInterval(fetchLive, 3000);
+    const reportInterval = setInterval(fetchReports, 15000);
+    return () => { clearInterval(liveInterval); clearInterval(reportInterval); };
+  }, [fetchLive, fetchReports]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -126,11 +216,6 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
   useEffect(() => {
     if (data.length > 0) {
       const latestData = data[0];
-      const latestTime = new Date(latestData.created_at).getTime();
-      const now = Date.now();
-      
-      setIsOffline(now - latestTime > 150000);
-
       if (latestData.id !== lastProcessedId) {
         setLastProcessedId(latestData.id);
         if (latestData.is_emergency) {
@@ -140,13 +225,6 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
       }
     }
   }, [data, lastProcessedId]);
-
-  async function fetchData() {
-    const { data: rawData, error } = await insforge.database
-      .from("sensor_readings")
-      .select().order("created_at", { ascending: false }).limit(1000);
-    if (!error && rawData) setData(rawData as SensorData[]);
-  }
 
   const filteredData = useMemo(() => {
     return data.filter(d => {
@@ -165,9 +243,10 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
   }, [filteredData, currentPage]);
 
   const latest = useMemo(() => {
-    if (isOffline || data.length === 0) return { temp: 0, hum: 0, ppm: 0, mov_percent: 0, baseline_ppm: 0, id: 'offline' };
-    return data[0];
-  }, [data, isOffline]);
+    if (liveData && !isOffline) return { temp: liveData.temp, hum: liveData.hum, ppm: liveData.ppm, mov_percent: liveData.mov ? 100 : 0, baseline_ppm: liveData.baseline_ppm, id: liveData.id };
+    if (data.length > 0) return data[0];
+    return { temp: 0, hum: 0, ppm: 0, mov_percent: 0, baseline_ppm: 0, id: 'offline' };
+  }, [liveData, data, isOffline]);
 
   const getStatus = (type: string, val: number, base?: number) => {
     if (val === 0 && isOffline) return { color: "text-gray-400", text: "APAGADO", bg: "bg-gray-400" };
@@ -189,7 +268,10 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
     return { color: "text-[#22C55E]", text: "NORMAL", bg: "bg-[#22C55E]" };
   };
 
-  const sparklineData = useMemo(() => data.slice(0, 20).reverse().map(d => ({ temp: d.temp, hum: d.hum, ppm: d.ppm, mov: d.mov_percent })), [data]);
+  const sparklineData = useMemo(() => {
+    if (liveHistory.length > 3) return liveHistory.slice(0, 20).reverse().map(d => ({ temp: d.temp, hum: d.hum, ppm: d.ppm, mov: d.mov ? 100 : 0 }));
+    return data.slice(0, 20).reverse().map(d => ({ temp: d.temp, hum: d.hum, ppm: d.ppm, mov: d.mov_percent }));
+  }, [liveHistory, data]);
   const chartData = useMemo(() => [...filteredData].reverse().map(d => ({ time: format(parseISO(d.created_at), "HH:mm"), temp: d.temp, hum: d.hum, ppm: d.ppm, mov: d.mov_percent })), [filteredData]);
 
   return (
@@ -299,35 +381,83 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
         </div>
       </div>
 
-      {/* MODAL DETALLES */}
-      {selectedReport && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-black/5">
-            <div className="bg-[var(--color-primary)] p-10 text-white text-center">
-              <h3 className="text-3xl font-black uppercase tracking-tighter italic leading-none">Reporte Detallado</h3>
-              <p className="text-xs font-bold opacity-80 mt-2 uppercase tracking-[0.3em]">{format(parseISO(selectedReport.created_at), "dd MMM yyyy, HH:mm:ss")}</p>
+      {/* MODAL REPORTE ENRIQUECIDO */}
+      {selectedReport && (() => {
+        const events = parseEvents(selectedReport.events);
+        const narrative = generarNarrativa(selectedReport);
+        return (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[200] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden border border-black/5 my-8">
+            {/* Header */}
+            <div className="bg-[var(--color-primary)] p-8 text-white text-center relative">
+              {selectedReport.is_emergency && <div className="absolute top-3 right-3 bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest animate-pulse">Emergencia</div>}
+              <Shield size={36} className="mx-auto mb-2 opacity-80" />
+              <h3 className="text-2xl font-black uppercase tracking-tighter italic">Reporte Detallado</h3>
+              <p className="text-xs font-bold opacity-80 mt-1 uppercase tracking-[0.2em]">{format(parseISO(selectedReport.created_at), "dd MMM yyyy, HH:mm:ss")}</p>
+              {selectedReport.total_samples && <p className="text-[10px] mt-2 opacity-60">{selectedReport.total_samples} muestras en 60 segundos</p>}
             </div>
             
-            <div className="p-10 space-y-8">
-              <div className="grid grid-cols-2 gap-6">
+            <div className="p-6 space-y-5">
+              {/* Sensor cards con rangos */}
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "Temp", val: selectedReport.temp.toFixed(1) + "°C", col: "text-red-500", icon: "🌡️" },
-                  { label: "Hum", val: selectedReport.hum.toFixed(0) + "%", col: "text-blue-500", icon: "💧" },
-                  { label: "Gas", val: selectedReport.ppm.toFixed(0) + "ppm", col: "text-emerald-500", icon: "💨" },
-                  { label: "Mov", val: selectedReport.mov_percent.toFixed(0) + "%", col: "text-orange-500", icon: "🏃" }
+                  { label: "Temperatura", val: selectedReport.temp, unit: "°C", min: selectedReport.temp_min, max: selectedReport.temp_max, trend: selectedReport.temp_trend, col: "text-red-500", bg: "bg-red-50", icon: "🌡️" },
+                  { label: "Humedad", val: selectedReport.hum, unit: "%", min: selectedReport.hum_min, max: selectedReport.hum_max, trend: undefined, col: "text-blue-500", bg: "bg-blue-50", icon: "💧" },
+                  { label: "Gas (PPM)", val: selectedReport.ppm, unit: "ppm", min: selectedReport.ppm_min, max: selectedReport.ppm_max, trend: selectedReport.ppm_trend, col: "text-emerald-500", bg: "bg-emerald-50", icon: "💨" },
+                  { label: "Movimiento", val: selectedReport.mov_percent, unit: "%", min: undefined, max: undefined, trend: undefined, col: "text-orange-500", bg: "bg-orange-50", icon: "🏃" }
                 ].map(item => (
-                  <div key={item.label} className="bg-gray-50 p-6 rounded-[2rem] border border-black/5 flex flex-col items-center justify-center text-center shadow-sm">
-                    <span className="text-[24px] mb-2">{item.icon}</span>
-                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-1">{item.label}</span>
-                    <span className={`text-4xl font-black ${item.col} tracking-tighter`}>{item.val}</span>
+                  <div key={item.label} className={`${item.bg} p-4 rounded-2xl border border-black/5`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">{item.label}</span>
+                      <span className="text-lg">{item.icon}</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className={`text-3xl font-black ${item.col} tracking-tighter`}>{item.val?.toFixed(1)}</span>
+                      <span className="text-xs text-gray-400 font-bold">{item.unit}</span>
+                      {item.trend && <span className="ml-1">{getTrendIcon(item.trend)}</span>}
+                    </div>
+                    {item.min != null && item.max != null && (
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-[10px] text-gray-400 font-bold">↕ {item.min.toFixed(1)} – {item.max.toFixed(1)}{item.unit}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-              <button onClick={() => setSelectedReport(null)} className="w-full py-6 bg-black text-white hover:bg-gray-900 rounded-[2rem] font-black uppercase tracking-[0.3em] text-xs transition-all shadow-xl">CERRAR REPORTE</button>
+
+              {/* Narrativa */}
+              <div className="bg-gray-50 rounded-2xl p-5 border border-black/5">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primary)] mb-2 flex items-center gap-2"><Activity size={14} /> Análisis del Periodo</h4>
+                <p className="text-sm text-gray-700 leading-relaxed">{narrative}</p>
+              </div>
+
+              {/* Timeline de eventos */}
+              {events.length > 0 && (
+                <div className="bg-gray-50 rounded-2xl p-5 border border-black/5">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primary)] mb-3 flex items-center gap-2"><Clock size={14} /> Timeline de Eventos</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {events.map((evt, i) => (
+                      <div key={i} className="flex items-start gap-3 text-sm">
+                        <span className="text-lg">{evt.toLowerCase().includes("critico") || evt.toLowerCase().includes("emergencia") ? "🔴" : evt.toLowerCase().includes("elevado") ? "🟡" : evt.toLowerCase().includes("movimiento") ? "🟠" : "🟢"}</span>
+                        <span className="text-gray-600 font-medium">{evt}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {events.length === 0 && (
+                <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 text-center">
+                  <span className="text-sm text-emerald-600 font-bold">✅ Sin eventos significativos durante este periodo</span>
+                </div>
+              )}
+
+              <button onClick={() => setSelectedReport(null)} className="w-full py-5 bg-black text-white hover:bg-gray-900 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl">Cerrar Reporte</button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {toast.visible && (
         <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 ${toast.isCritical ? 'bg-red-600' : 'bg-black'} text-white px-10 py-6 rounded-full flex items-center gap-6 z-[250] shadow-2xl`}>
