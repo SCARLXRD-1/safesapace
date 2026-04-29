@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         hum_max: hum_max ?? null,
         ppm_trend: ppm_trend ?? null,
         temp_trend: temp_trend ?? null,
-        events: events ?? null,
+        events: events ? JSON.stringify(events) : null,
         total_samples: total_samples ?? null,
       }]);
 
