@@ -22,7 +22,8 @@ async function sendTelegramAlert(message: string) {
       body: JSON.stringify({
         chat_id: chatId,
         text: message,
-        parse_mode: 'HTML'
+        parse_mode: 'HTML',
+        disable_notification: false // Asegura que el celular suene/vibre
       })
     });
   } catch (error) {
@@ -55,11 +56,13 @@ export async function POST(request: Request) {
     // Convertir ppm a porcentaje (aproximado, asumiendo max 10000)
     const mq2_percent = Math.min(100, Math.round(((ppm ?? 0) / 10000) * 100));
     
-    // Umbrales de emergencia (Ejemplo: Gas > 40% o Movimiento detectado)
+    // Umbrales de emergencia
     const isGasHigh = mq2_percent > 40;
     const isMovDetected = mov === true;
+    const isTempHigh = (temp ?? 0) >= 35.0; // Calor extremo (ajustable)
+    const isHumHigh = (hum ?? 0) >= 75.0;  // Humedad extrema (ajustable)
     
-    if (isGasHigh || isMovDetected) {
+    if (isGasHigh || isMovDetected || isTempHigh || isHumHigh) {
       const now = Date.now();
       // Solo manda mensaje si ha pasado más del tiempo de cooldown
       if (now - lastAlertTime > TELEGRAM_COOLDOWN) {
@@ -67,21 +70,25 @@ export async function POST(request: Request) {
         
         let alertMessage = `🚨 <b>ALERTA SAFESPACE</b> 🚨\n\n`;
         
-        // 1. Indicar la causa de la alerta
+        // 1. Indicar la causa de la alerta (priorizando las más graves)
         if (isGasHigh && isMovDetected) {
           alertMessage += `⚠️🏃 <b>¡PELIGRO MÚLTIPLE!</b> Gas Alto y Movimiento.\n\n`;
         } else if (isGasHigh) {
-          alertMessage += `⚠️ <b>¡ALERTA DE GAS/HUMO!</b> Nivel peligroso.\n\n`;
+          alertMessage += `⚠️ <b>¡ALERTA DE GAS/HUMO!</b> Nivel peligroso detectado.\n\n`;
         } else if (isMovDetected) {
           alertMessage += `🏃 <b>¡ALERTA DE INTRUSO!</b> Movimiento detectado.\n\n`;
+        } else if (isTempHigh) {
+          alertMessage += `🔥 <b>¡ALERTA DE TEMPERATURA!</b> Calor extremo detectado.\n\n`;
+        } else if (isHumHigh) {
+          alertMessage += `💧 <b>¡ALERTA DE HUMEDAD!</b> Humedad inusualmente alta.\n\n`;
         }
 
         // 2. Mostrar TODOS los datos siempre
         alertMessage += `📊 <b>Estado de los Sensores:</b>\n`;
         alertMessage += `💨 Gas (MQ2): ${mq2_percent}% ${isGasHigh ? '🔴' : '🟢'}\n`;
         alertMessage += `🏃 Movimiento: ${isMovDetected ? 'DETECTADO 🔴' : 'DESPEJADO 🟢'}\n`;
-        alertMessage += `🌡️ Temperatura: ${(temp ?? 0).toFixed(1)}°C\n`;
-        alertMessage += `💧 Humedad: ${(hum ?? 0).toFixed(1)}%\n`;
+        alertMessage += `🌡️ Temperatura: ${(temp ?? 0).toFixed(1)}°C ${isTempHigh ? '🔴' : '🟢'}\n`;
+        alertMessage += `💧 Humedad: ${(hum ?? 0).toFixed(1)}% ${isHumHigh ? '🔴' : '🟢'}\n`;
         
         // No usamos await para que el ESP32 no se quede esperando a Telegram
         sendTelegramAlert(alertMessage);
