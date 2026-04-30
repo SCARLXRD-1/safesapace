@@ -72,21 +72,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to insert data" }, { status: 500 });
     }
 
-    // --- ENVIAR REPORTE A TELEGRAM ---
-    // Convertir ppm a porcentaje
-    const mq2_percent = Math.min(100, Math.round(((ppm ?? 0) / 10000) * 100));
-    const mq2_max_percent = Math.min(100, Math.round(((ppm_max ?? 0) / 10000) * 100));
-
-    let reportMessage = `📝 <b>REPORTE DE RUTINA (60s)</b>\n\n`;
-    reportMessage += `<b>Promedios del último minuto:</b>\n`;
-    reportMessage += `💨 Gas (MQ2): ${mq2_percent}%\n`;
-    reportMessage += `🌡️ Temperatura: ${(temp ?? 0).toFixed(1)}°C\n`;
-    reportMessage += `💧 Humedad: ${(hum ?? 0).toFixed(1)}%\n`;
-    reportMessage += `🏃 Actividad (Movimiento): ${mov_percent ?? 0}%\n\n`;
+    // --- ENVIAR REPORTE DETALLADO A TELEGRAM ---
+    let reportMessage = `📝 <b>REPORTE DETALLADO (60s)</b>\n\n`;
     
-    reportMessage += `<b>Picos Máximos detectados:</b>\n`;
-    reportMessage += `📈 Gas Max: ${mq2_max_percent}%\n`;
-    reportMessage += `🔥 Temp Max: ${(temp_max ?? 0).toFixed(1)}°C\n`;
+    reportMessage += `🌡️ <b>TEMPERATURA:</b> ${temp.toFixed(1)}°C\n`;
+    reportMessage += `└ <i>Min: ${temp_min ?? temp}°C | Max: ${temp_max ?? temp}°C</i>\n\n`;
+    
+    reportMessage += `💧 <b>HUMEDAD:</b> ${hum.toFixed(1)}%\n`;
+    reportMessage += `└ <i>Min: ${hum_min ?? hum}% | Max: ${hum_max ?? hum}%</i>\n\n`;
+    
+    reportMessage += `💨 <b>GAS (PPM):</b> ${ppm.toFixed(0)} ppm\n`;
+    reportMessage += `└ <i>Rango: ${ppm_min ?? ppm} - ${ppm_max ?? ppm} ppm</i>\n\n`;
+    
+    reportMessage += `🏃 <b>MOVIMIENTO:</b> ${mov_percent}% de actividad\n\n`;
+
+    // Análisis de Periodo (Lógica similar a la web)
+    reportMessage += `✨ <b>ANÁLISIS DEL PERIODO:</b>\n`;
+    if ((ppm_max ?? 0) > (baseline_ppm ?? 0) + 100) {
+      reportMessage += `• Nivel de gas elevado. Se detectó un pico significativo.\n`;
+    } else {
+      reportMessage += `• Niveles de gas estables y dentro del rango normal.\n`;
+    }
+    if (mov_percent > 0) {
+      reportMessage += `• Se registró movimiento en el área monitoreada.\n`;
+    } else {
+      reportMessage += `• Sin presencia o movimiento detectado.\n`;
+    }
+    reportMessage += `\n`;
+
+    // Timeline de eventos
+    if (events && Array.isArray(events) && events.length > 0) {
+      reportMessage += `🕒 <b>TIMELINE DE EVENTOS:</b>\n`;
+      events.forEach((ev: string) => {
+        reportMessage += `📍 ${ev}\n`;
+      });
+    }
 
     sendTelegramReport(reportMessage);
 
