@@ -66,10 +66,22 @@ export async function POST(request: Request) {
         lastAlertTime = now;
         
         let alertMessage = `🚨 <b>ALERTA SAFESPACE</b> 🚨\n\n`;
-        if (isGasHigh) alertMessage += `⚠️ <b>Gas/Humo detectado:</b> ${mq2_percent}% (Peligro)\n`;
-        if (isMovDetected) alertMessage += `🏃 <b>Movimiento detectado</b> en el área.\n`;
         
-        alertMessage += `\n🌡️ Temp: ${(temp ?? 0).toFixed(1)}°C | 💧 Hum: ${(hum ?? 0).toFixed(1)}%`;
+        // 1. Indicar la causa de la alerta
+        if (isGasHigh && isMovDetected) {
+          alertMessage += `⚠️🏃 <b>¡PELIGRO MÚLTIPLE!</b> Gas Alto y Movimiento.\n\n`;
+        } else if (isGasHigh) {
+          alertMessage += `⚠️ <b>¡ALERTA DE GAS/HUMO!</b> Nivel peligroso.\n\n`;
+        } else if (isMovDetected) {
+          alertMessage += `🏃 <b>¡ALERTA DE INTRUSO!</b> Movimiento detectado.\n\n`;
+        }
+
+        // 2. Mostrar TODOS los datos siempre
+        alertMessage += `📊 <b>Estado de los Sensores:</b>\n`;
+        alertMessage += `💨 Gas (MQ2): ${mq2_percent}% ${isGasHigh ? '🔴' : '🟢'}\n`;
+        alertMessage += `🏃 Movimiento: ${isMovDetected ? 'DETECTADO 🔴' : 'DESPEJADO 🟢'}\n`;
+        alertMessage += `🌡️ Temperatura: ${(temp ?? 0).toFixed(1)}°C\n`;
+        alertMessage += `💧 Humedad: ${(hum ?? 0).toFixed(1)}%\n`;
         
         // No usamos await para que el ESP32 no se quede esperando a Telegram
         sendTelegramAlert(alertMessage);
