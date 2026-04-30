@@ -1,6 +1,35 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@insforge/sdk';
 
+// Cooldown para evitar spam (1 minuto = 60000 ms)
+const TELEGRAM_COOLDOWN = 60 * 1000;
+let lastAlertTime = 0;
+
+async function sendTelegramAlert(message: string) {
+  // Las credenciales las tomaremos de variables de entorno para que no queden expuestas en GitHub
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  
+  if (!token || !chatId) {
+    console.warn("[LIVE] Telegram Token o Chat ID no configurados.");
+    return;
+  }
+
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML'
+      })
+    });
+  } catch (error) {
+    console.error("[LIVE] Error enviando Telegram:", error);
+  }
+}
+
 // POST: Recibe dato en vivo del ESP32 cada 5 segundos
 // El trigger de DB se encarga de publicarlo por WebSocket al dashboard
 export async function POST(request: Request) {
@@ -20,6 +49,31 @@ export async function POST(request: Request) {
     if (error) {
       console.error("[LIVE] Error insertando en sensor_live:", error);
       return NextResponse.json({ error: "Failed to insert live data" }, { status: 500 });
+    }
+
+    // --- LÓGICA DE ALERTA TELEGRAM ---
+    // Convertir ppm a porcentaje (aproximado, asumiendo max 10000)
+    const mq2_percent = Math.min(100, Math.round(((ppm ?? 0) / 10000) * 100));
+    
+    // Umbrales de emergencia (Ejemplo: Gas > 40% o Movimiento detectado)
+    const isGasHigh = mq2_percent > 40;
+    const isMovDetected = mov === true;
+    
+    if (isGasHigh || isMovDetected) {
+      const now = Date.now();
+      // Solo manda mensaje si ha pasado más del tiempo de cooldown
+      if (now - lastAlertTime > TELEGRAM_COOLDOWN) {
+        lastAlertTime = now;
+        
+        let alertMessage = `🚨 <b>ALERTA SAFESPACE</b> 🚨\n\n`;
+        if (isGasHigh) alertMessage += `⚠️ <b>Gas/Humo detectado:</b> ${mq2_percent}% (Peligro)\n`;
+        if (isMovDetected) alertMessage += `🏃 <b>Movimiento detectado</b> en el área.\n`;
+        
+        alertMessage += `\n🌡️ Temp: ${(temp ?? 0).toFixed(1)}°C | 💧 Hum: ${(hum ?? 0).toFixed(1)}%`;
+        
+        // No usamos await para que el ESP32 no se quede esperando a Telegram
+        sendTelegramAlert(alertMessage);
+      }
     }
 
     return NextResponse.json({ success: true });
