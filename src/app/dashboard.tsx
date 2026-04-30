@@ -101,8 +101,8 @@ const SensorCard = ({ title, value, unit, status, sparkKey, color, sparklineData
             <div className={`w-3 h-3 rounded-full ${status.bg} shadow-[0_0_8px_currentColor]`}></div>
           </div>
           
-          <div className="flex-1 -mx-2 overflow-hidden mt-4">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="-mx-2 overflow-hidden mt-4" style={{height: 160}}>
+            <ResponsiveContainer width="100%" height={160}>
               <AreaChart data={sparklineData} margin={{left: -15, right: 5, top: 5, bottom: 0}}>
                 <defs>
                   <linearGradient id={`gradient-${sparkKey}`} x1="0" y1="0" x2="0" y2="1">
