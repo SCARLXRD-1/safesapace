@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { insforge } from "./insforge-client";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { format, parseISO } from "date-fns";
-import { BellRing, Activity, WifiOff, Wifi, ChevronRight, ChevronLeft, TrendingUp, TrendingDown, Minus, Zap, Clock, Shield } from "lucide-react";
+import { BellRing, Activity, WifiOff, Wifi, ChevronRight, ChevronLeft, TrendingUp, TrendingDown, Minus, Zap, Clock, Shield, Radio } from "lucide-react";
 
 // -- Tipo para datos en vivo (tabla sensor_live) --
 interface LiveData {
@@ -159,32 +159,32 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
   const [endDate, setEndDate] = useState("");
   const [toast, setToast] = useState<{ message: string; visible: boolean; isCritical: boolean; title?: string }>({ message: "", visible: false, isCritical: false });
   const [isOffline, setIsOffline] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
 
   const [lastProcessedId, setLastProcessedId] = useState<string | null>(null);
   const [nextReportIn, setNextReportIn] = useState(60);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedReport, setSelectedReport] = useState<SensorData | null>(null);
+  const lastLiveTimestamp = useRef<number>(Date.now());
   const itemsPerPage = 10;
 
-  // Fetch live data every 3 seconds (lightweight - just 1 row)
-  const fetchLive = useCallback(async () => {
+  // Fetch initial live data (one-time, then WebSocket takes over)
+  const fetchInitialLive = useCallback(async () => {
     const { data: liveRows, error } = await insforge.database
       .from("sensor_live")
-      .select().order("created_at", { ascending: false }).limit(1);
+      .select().order("created_at", { ascending: false }).limit(20);
     if (!error && liveRows && liveRows.length > 0) {
-      const newLive = liveRows[0] as LiveData;
-      setLiveData(newLive);
-      setLiveHistory(prev => {
-        if (prev.length > 0 && prev[0].id === newLive.id) return prev;
-        return [newLive, ...prev].slice(0, 30);
-      });
-      const elapsed = Date.now() - new Date(newLive.created_at).getTime();
+      const latest = liveRows[0] as LiveData;
+      setLiveData(latest);
+      setLiveHistory(liveRows as LiveData[]);
+      lastLiveTimestamp.current = new Date(latest.created_at).getTime();
+      const elapsed = Date.now() - lastLiveTimestamp.current;
       setIsOffline(elapsed > 15000);
     }
   }, []);
 
-  // Fetch reports (heavier, less frequent)
+  // Fetch reports (heavier, less frequent - polling is fine here)
   const fetchReports = useCallback(async () => {
     const { data: rawData, error } = await insforge.database
       .from("sensor_readings")
@@ -192,13 +192,80 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
     if (!error && rawData) setData(rawData as SensorData[]);
   }, []);
 
+  // WebSocket Realtime: suscripción al canal sensor:live
   useEffect(() => {
-    fetchLive();
+    let mounted = true;
+
+    const setupRealtime = async () => {
+      try {
+        await insforge.realtime.connect();
+        if (!mounted) return;
+        setWsConnected(true);
+
+        // Escuchar eventos de conexión
+        insforge.realtime.on('connect', () => {
+          if (mounted) setWsConnected(true);
+        });
+        insforge.realtime.on('disconnect', () => {
+          if (mounted) setWsConnected(false);
+        });
+
+        // Suscribirse al canal de datos en vivo
+        const subResult = await insforge.realtime.subscribe('sensor:live');
+        if (!subResult.ok) {
+          console.error('[WS] Error suscribiendo a sensor:live:', subResult.error);
+          return;
+        }
+        console.log('[WS] Suscrito a sensor:live — datos en tiempo real activos');
+
+        // Listener de nuevos datos del sensor
+        insforge.realtime.on('new_reading', (payload: any) => {
+          if (!mounted) return;
+          const newLive: LiveData = {
+            id: payload.id,
+            created_at: payload.created_at,
+            temp: payload.temp,
+            hum: payload.hum,
+            ppm: payload.ppm,
+            mov: payload.mov,
+            baseline_ppm: payload.baseline_ppm,
+          };
+          setLiveData(newLive);
+          setLiveHistory(prev => [newLive, ...prev].slice(0, 30));
+          lastLiveTimestamp.current = Date.now();
+          setIsOffline(false);
+        });
+      } catch (err) {
+        console.error('[WS] Error conectando realtime:', err);
+        if (mounted) setWsConnected(false);
+      }
+    };
+
+    setupRealtime();
+
+    return () => {
+      mounted = false;
+      insforge.realtime.unsubscribe('sensor:live');
+      insforge.realtime.disconnect();
+    };
+  }, []);
+
+  // Cargar datos iniciales + polling de reportes (cada 15s)
+  useEffect(() => {
+    fetchInitialLive();
     fetchReports();
-    const liveInterval = setInterval(fetchLive, 3000);
     const reportInterval = setInterval(fetchReports, 15000);
-    return () => { clearInterval(liveInterval); clearInterval(reportInterval); };
-  }, [fetchLive, fetchReports]);
+    return () => { clearInterval(reportInterval); };
+  }, [fetchInitialLive, fetchReports]);
+
+  // Detector de offline: si no llegan datos en 15s, marcar como offline
+  useEffect(() => {
+    const offlineCheck = setInterval(() => {
+      const elapsed = Date.now() - lastLiveTimestamp.current;
+      setIsOffline(elapsed > 15000);
+    }, 5000);
+    return () => clearInterval(offlineCheck);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -286,6 +353,16 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
             <div className={`px-6 py-2 border rounded-full flex items-center gap-3 ${isOffline ? 'bg-red-500/10 border-red-500/30 text-red-600' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'}`}>
               {isOffline ? <WifiOff size={18} /> : <Wifi size={18} />}
               <span className="text-sm font-black uppercase tracking-widest">{isOffline ? "SISTEMA APAGADO" : "SISTEMA EN LÍNEA"}</span>
+            </div>
+            <div className={`px-6 py-2 border rounded-full flex items-center gap-3 transition-all duration-500 ${
+              wsConnected 
+                ? 'bg-violet-500/10 border-violet-500/30 text-violet-600' 
+                : 'bg-gray-200/50 border-gray-300/30 text-gray-400'
+            }`}>
+              <Radio size={18} className={wsConnected ? 'animate-pulse' : ''} />
+              <span className="text-sm font-black uppercase tracking-widest">
+                {wsConnected ? "TIEMPO REAL" : "RECONECTANDO..."}
+              </span>
             </div>
             {!isOffline && (
               <div className="px-6 py-2 border border-black/10 bg-white rounded-full flex items-center gap-3">
