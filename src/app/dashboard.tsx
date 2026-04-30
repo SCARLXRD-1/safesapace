@@ -390,8 +390,8 @@ export function Dashboard({ dashboardUrl }: { dashboardUrl: string }) {
         {/* Historico Chart */}
         <div className="bg-white border border-black/5 rounded-[2rem] p-8 shadow-xl max-w-7xl mx-auto">
           <h2 className="text-xl font-black mb-8 flex items-center gap-3 text-[var(--color-primary)] uppercase italic"><Activity /> Histórico de Monitoreo</h2>
-          <div className="h-[450px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={450}>
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#EF4444" stopOpacity={0.1}/><stop offset="95%" stopColor="#EF4444" stopOpacity={0}/></linearGradient>
